@@ -1,0 +1,539 @@
+@using TadbirRuleEngine.Web.Models
+@using TadbirRuleEngine.Web.Services
+@using Newtonsoft.Json.Linq
+@using Newtonsoft.Json
+@inject ApiService ApiService
+@inject IToastService ToastService
+
+<div class="card border-success">
+    <div class="card-header bg-success text-white">
+        <h6 class="mb-0">
+            <i class="bi bi-magic me-2"></i>
+            ساخت قانون به صورت بصری
+        </h6>
+    </div>
+    <div class="card-body">
+        @if (ApiResponse == null)
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                ابتدا API را تست کنید تا فیلدها استخراج شوند
+            </div>
+        }
+        else
+        {
+            <!-- Step 1: Extract Fields -->
+            @if (extractedFields == null)
+            {
+                <button class="btn btn-primary mb-3" @onclick="ExtractFields" disabled="@isExtracting">
+                    @if (isExtracting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-search me-1"></i>
+                    }
+                    استخراج فیلدهای موجود
+                </button>
+            }
+            else
+            {
+                <!-- Step 2: Build Condition -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="bi bi-filter-circle me-1"></i>
+                                ساخت شرط (اختیاری)
+                            </h6>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="AddCondition">
+                                <i class="bi bi-plus-lg me-1"></i>
+                                افزودن شرط
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (!conditions.Any())
+                        {
+                            <p class="text-muted small mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                اگر می‌خواهید این قانون فقط در شرایط خاصی اجرا شود، شرط اضافه کنید
+                            </p>
+                        }
+                        else
+                        {
+                            @foreach (var (condition, index) in conditions.Select((c, i) => (c, i)))
+                            {
+                                <div class="card mb-2 border-primary">
+                                    <div class="card-body p-3">
+                                        <div class="row g-2 align-items-end">
+                                            <!-- Field Selection -->
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">فیلد:</label>
+                                                <select class="form-select form-select-sm" @bind="condition.FieldPath">
+                                                    <option value="">-- انتخاب فیلد --</option>
+                                                    @foreach (var field in extractedFields)
+                                                    {
+                                                        <option value="@field.Path">
+                                                            @field.Path (@field.SampleValue)
+                                                        </option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            
+                                            <!-- Operator Selection -->
+                                            <div class="col-md-2">
+                                                <label class="form-label small fw-bold">عملگر:</label>
+                                                <select class="form-select form-select-sm" @bind="condition.Operator">
+                                                    <option value="==">برابر (==)</option>
+                                                    <option value="!=">نابرابر (!=)</option>
+                                                    <option value="contains">شامل</option>
+                                                    <option value="startsWith">شروع با</option>
+                                                    <option value="endsWith">پایان با</option>
+                                                    <option value=">">بزرگتر (&gt;)</option>
+                                                    <option value="<">کوچکتر (&lt;)</option>
+                                                    <option value=">=">بزرگتر مساوی (&gt;=)</option>
+                                                    <option value="<=">کوچکتر مساوی (&lt;=)</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <!-- Value Input -->
+                                            <div class="col-md-4">
+                                                <label class="form-label small fw-bold">مقدار:</label>
+                                                <input type="text" class="form-control form-control-sm" 
+                                                       @bind="condition.Value" 
+                                                       placeholder="مقدار مورد نظر را وارد کنید" />
+                                            </div>
+                                            
+                                            <!-- Remove Button -->
+                                            <div class="col-md-2">
+                                                <button class="btn btn-sm btn-outline-danger w-100" 
+                                                        @onclick="() => RemoveCondition(index)">
+                                                    <i class="bi bi-trash"></i> حذف
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Logical Operator -->
+                                        @if (index < conditions.Count - 1)
+                                        {
+                                            <div class="mt-2">
+                                                <select class="form-select form-select-sm w-auto" @bind="condition.LogicalOperator">
+                                                    <option value="AND">و (AND)</option>
+                                                    <option value="OR">یا (OR)</option>
+                                                </select>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            
+                            <!-- Condition Preview -->
+                            <div class="alert alert-info mt-3">
+                                <label class="form-label fw-bold small">پیش‌نمایش شرط:</label>
+                                <div class="small">
+                                    @foreach (var (condition, index) in conditions.Select((c, i) => (c, i)))
+                                    {
+                                        <span class="badge bg-primary me-1">@condition.FieldPath</span>
+                                        <span class="me-1">@GetOperatorText(condition.Operator)</span>
+                                        <span class="badge bg-success me-1">"@condition.Value"</span>
+                                        @if (index < conditions.Count - 1)
+                                        {
+                                            <span class="badge bg-warning text-dark me-1">@condition.LogicalOperator</span>
+                                        }
+                                    }
+                                </div>
+                                
+                                <button class="btn btn-sm btn-primary mt-2" @onclick="TestCondition" disabled="@isTestingCondition">
+                                    @if (isTestingCondition)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle me-1"></i>
+                                    }
+                                    تست شرط
+                                </button>
+                                
+                                @if (conditionTestResult != null)
+                                {
+                                    <span class="badge @(conditionTestResult.Value ? "bg-success" : "bg-danger") ms-2">
+                                        @(conditionTestResult.Value ? "✓ شرط برقرار است" : "✗ شرط برقرار نیست")
+                                    </span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Step 3: Build Output Mapping -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">
+                            <i class="bi bi-diagram-3 me-1"></i>
+                            انتخاب فیلدها برای ارسال به قانون بعدی
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">
+                            <i class="bi bi-info-circle me-1"></i>
+                            فیلدهایی که می‌خواهید به قانون بعدی ارسال شوند را انتخاب کنید
+                        </p>
+                        
+                        <div class="row">
+                            @foreach (var field in extractedFields)
+                            {
+                                <div class="col-md-6 mb-2">
+                                    <div class="card @(selectedMappingFields.Contains(field) ? "border-success" : "")">
+                                        <div class="card-body p-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" 
+                                                       id="field_@field.Path.GetHashCode()"
+                                                       checked="@selectedMappingFields.Contains(field)"
+                                                       @onchange="@(e => ToggleFieldSelection(field, (bool)e.Value!))" />
+                                                <label class="form-check-label small" for="field_@field.Path.GetHashCode()">
+                                                    <strong>@GetFieldName(field.Path)</strong>
+                                                    <br />
+                                                    <code class="text-muted">@field.Path</code>
+                                                    <br />
+                                                    <span class="badge bg-secondary">@field.SampleValue</span>
+                                                </label>
+                                            </div>
+                                            
+                                            @if (selectedMappingFields.Contains(field))
+                                            {
+                                                <div class="mt-2">
+                                                    <input type="text" class="form-control form-control-sm" 
+                                                           placeholder="نام فیلد در خروجی (اختیاری)"
+                                                           @bind="field.CustomName" />
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        @if (selectedMappingFields.Any())
+                        {
+                            <div class="alert alert-success mt-3">
+                                <label class="form-label fw-bold small">پیش‌نمایش نگاشت خروجی:</label>
+                                <pre class="mb-2 small"><code>@GetMappingPreview()</code></pre>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Step 4: Generate and Apply -->
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success" @onclick="GenerateAndApply" disabled="@isGenerating">
+                        @if (isGenerating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        ایجاد و اعمال قانون
+                    </button>
+                    
+                    <button class="btn btn-outline-secondary" @onclick="Reset">
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                        شروع مجدد
+                    </button>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public object? ApiResponse { get; set; }
+    [Parameter] public EventCallback<string> OnConditionGenerated { get; set; }
+    [Parameter] public EventCallback<string> OnMappingGenerated { get; set; }
+    
+    private List<FieldInfo>? extractedFields;
+    private List<ConditionItem> conditions = new();
+    private HashSet<FieldInfo> selectedMappingFields = new();
+    
+    private bool isExtracting = false;
+    private bool isTestingCondition = false;
+    private bool isGenerating = false;
+    private bool? conditionTestResult = null;
+    
+    private async Task ExtractFields()
+    {
+        if (ApiResponse == null) return;
+        
+        isExtracting = true;
+        try
+        {
+            var response = await ApiService.PostAsync<ExtractFieldsResponse>(
+                "/api/RuleBuilder/extract-fields", 
+                ApiResponse);
+            
+            if (response?.Fields != null)
+            {
+                extractedFields = response.Fields;
+                ToastService.ShowSuccess($"{extractedFields.Count} فیلد استخراج شد");
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در استخراج فیلدها: {ex.Message}");
+        }
+        finally
+        {
+            isExtracting = false;
+        }
+    }
+    
+    private void AddCondition()
+    {
+        conditions.Add(new ConditionItem
+        {
+            FieldPath = "",
+            Operator = "==",
+            Value = "",
+            LogicalOperator = "AND"
+        });
+    }
+    
+    private void RemoveCondition(int index)
+    {
+        conditions.RemoveAt(index);
+        conditionTestResult = null;
+    }
+    
+    private async Task TestCondition()
+    {
+        if (!conditions.Any() || ApiResponse == null) return;
+        
+        isTestingCondition = true;
+        conditionTestResult = null;
+        
+        try
+        {
+            var conditionRequest = new
+            {
+                conditions = conditions.Select(c => new
+                {
+                    fieldPath = c.FieldPath,
+                    @operator = c.Operator,
+                    value = c.Value,
+                    logicalOperator = c.LogicalOperator
+                }).ToList()
+            };
+            
+            var buildResponse = await ApiService.PostAsync<BuildConditionResponse>(
+                "/api/RuleBuilder/build-condition",
+                conditionRequest);
+            
+            if (buildResponse?.StructuredCondition != null)
+            {
+                var testRequest = new
+                {
+                    condition = buildResponse.StructuredCondition,
+                    apiResult = ApiResponse
+                };
+                
+                var testResponse = await ApiService.PostAsync<TestConditionResponse>(
+                    "/api/RuleBuilder/test-condition",
+                    testRequest);
+                
+                conditionTestResult = testResponse?.Result ?? false;
+                
+                if (conditionTestResult.Value)
+                {
+                    ToastService.ShowSuccess("شرط برقرار است ✓");
+                }
+                else
+                {
+                    ToastService.ShowWarning("شرط برقرار نیست ✗");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در تست شرط: {ex.Message}");
+        }
+        finally
+        {
+            isTestingCondition = false;
+        }
+    }
+    
+    private void ToggleFieldSelection(FieldInfo field, bool selected)
+    {
+        if (selected)
+        {
+            selectedMappingFields.Add(field);
+        }
+        else
+        {
+            selectedMappingFields.Remove(field);
+        }
+    }
+    
+    private string GetFieldName(string path)
+    {
+        var parts = path.Split('.');
+        return parts.Last().Replace("[0]", "");
+    }
+    
+    private string GetOperatorText(string op)
+    {
+        return op switch
+        {
+            "==" => "برابر",
+            "!=" => "نابرابر",
+            "contains" => "شامل",
+            "startsWith" => "شروع با",
+            "endsWith" => "پایان با",
+            ">" => "بزرگتر از",
+            "<" => "کوچکتر از",
+            ">=" => "بزرگتر مساوی",
+            "<=" => "کوچکتر مساوی",
+            _ => op
+        };
+    }
+    
+    private string GetMappingPreview()
+    {
+        var mapping = new JObject();
+        foreach (var field in selectedMappingFields)
+        {
+            var targetName = string.IsNullOrWhiteSpace(field.CustomName) 
+                ? GetFieldName(field.Path) 
+                : field.CustomName;
+            mapping[targetName] = $"{{{{apiResult.{field.Path}}}}}";
+        }
+        return mapping.ToString(Formatting.Indented);
+    }
+    
+    private async Task GenerateAndApply()
+    {
+        isGenerating = true;
+        
+        try
+        {
+            // Generate condition if any
+            string? conditionJson = null;
+            if (conditions.Any())
+            {
+                var conditionRequest = new
+                {
+                    conditions = conditions.Select(c => new
+                    {
+                        fieldPath = c.FieldPath,
+                        @operator = c.Operator,
+                        value = c.Value,
+                        logicalOperator = c.LogicalOperator
+                    }).ToList()
+                };
+                
+                var buildResponse = await ApiService.PostAsync<BuildConditionResponse>(
+                    "/api/RuleBuilder/build-condition",
+                    conditionRequest);
+                
+                conditionJson = buildResponse?.StructuredCondition;
+            }
+            
+            // Generate mapping if any fields selected
+            string? mappingJson = null;
+            if (selectedMappingFields.Any())
+            {
+                var mappingRequest = new
+                {
+                    fields = selectedMappingFields.Select(f => new
+                    {
+                        sourcePath = f.Path,
+                        targetName = string.IsNullOrWhiteSpace(f.CustomName) 
+                            ? GetFieldName(f.Path) 
+                            : f.CustomName
+                    }).ToList()
+                };
+                
+                var mappingResponse = await ApiService.PostAsync<BuildMappingResponse>(
+                    "/api/RuleBuilder/build-mapping",
+                    mappingRequest);
+                
+                mappingJson = mappingResponse?.Json;
+            }
+            
+            // Apply condition
+            if (!string.IsNullOrEmpty(conditionJson) && OnConditionGenerated.HasDelegate)
+            {
+                await OnConditionGenerated.InvokeAsync(conditionJson);
+            }
+            
+            // Apply mapping
+            if (!string.IsNullOrEmpty(mappingJson) && OnMappingGenerated.HasDelegate)
+            {
+                await OnMappingGenerated.InvokeAsync(mappingJson);
+            }
+            
+            ToastService.ShowSuccess("قانون با موفقیت ایجاد و اعمال شد");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در ایجاد قانون: {ex.Message}");
+        }
+        finally
+        {
+            isGenerating = false;
+        }
+    }
+    
+    private void Reset()
+    {
+        extractedFields = null;
+        conditions.Clear();
+        selectedMappingFields.Clear();
+        conditionTestResult = null;
+    }
+    
+    private class ConditionItem
+    {
+        public string FieldPath { get; set; } = "";
+        public string Operator { get; set; } = "==";
+        public string Value { get; set; } = "";
+        public string LogicalOperator { get; set; } = "AND";
+    }
+    
+    public class FieldInfo
+    {
+        public string Path { get; set; } = "";
+        public string Type { get; set; } = "";
+        public string SampleValue { get; set; } = "";
+        public bool IsArray { get; set; }
+        public string? CustomName { get; set; }
+    }
+    
+    private class ExtractFieldsResponse
+    {
+        public List<FieldInfo> Fields { get; set; } = new();
+    }
+    
+    private class BuildConditionResponse
+    {
+        public string StructuredCondition { get; set; } = "";
+        public string TemplateCondition { get; set; } = "";
+        public string Preview { get; set; } = "";
+    }
+    
+    private class BuildMappingResponse
+    {
+        public object Mapping { get; set; } = new();
+        public string Json { get; set; } = "";
+    }
+    
+    private class TestConditionResponse
+    {
+        public bool Result { get; set; }
+        public string Message { get; set; } = "";
+    }
+}

@@ -1,0 +1,825 @@
+@using TadbirRuleEngine.Web.Models
+@using TadbirRuleEngine.Web.Services
+@using Newtonsoft.Json.Linq
+@inject ApiService ApiService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <button class="btn btn-outline-secondary mb-2" @onclick="GoBack">
+                <i class="bi bi-arrow-right me-1"></i>
+                بازگشت
+            </button>
+            @if (policy != null)
+            {
+                <h2 class="mb-0">
+                    <i class="bi bi-file-earmark-text-fill me-2"></i>
+                    @policy.Name
+                </h2>
+                @if (!string.IsNullOrEmpty(policy.Description))
+                {
+                    <p class="text-muted">@policy.Description</p>
+                }
+            }
+        </div>
+        <button class="btn btn-primary" @onclick="ShowAddRuleModal" disabled="@isLoading">
+            <i class="bi bi-plus-lg me-1"></i>
+            افزودن قانون
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">در حال بارگذاری...</span>
+            </div>
+        </div>
+    }
+    else if (policy == null)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            سیاست یافت نشد
+        </div>
+    }
+    else
+    {
+        <!-- Policy Info Card -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>وضعیت:</strong>
+                                <span class="badge @(policy.IsActive ? "bg-success" : "bg-secondary") ms-2">
+                                    @(policy.IsActive ? "فعال" : "غیرفعال")
+                                </span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>تعداد قوانین:</strong>
+                                <span class="badge bg-info ms-2">@rules.Count</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>تاریخ ایجاد:</strong>
+                                <span class="text-muted ms-2">@policy.CreatedAt.ToString("yyyy/MM/dd")</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>آخرین اجرا:</strong>
+                                <span class="text-muted ms-2">
+                                    @(policy.LastExecutedAt.HasValue ? policy.LastExecutedAt.Value.ToString("yyyy/MM/dd HH:mm") : "هرگز")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rules List -->
+        @if (!rules.Any())
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                هیچ قانونی برای این سیاست تعریف نشده است. برای شروع یک قانون اضافه کنید.
+            </div>
+        }
+        else
+        {
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-check me-2"></i>
+                        قوانین (به ترتیب اجرا)
+                    </h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    @foreach (var rule in rules.OrderBy(r => r.Order))
+                    {
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="badge bg-primary me-2">@rule.Order</span>
+                                        <h6 class="mb-0">@rule.Name</h6>
+                                        <span class="badge @(rule.IsActive ? "bg-success" : "bg-secondary") ms-2">
+                                            @(rule.IsActive ? "فعال" : "غیرفعال")
+                                        </span>
+                                    </div>
+                                    
+                                    @if (!string.IsNullOrEmpty(rule.Description))
+                                    {
+                                        <p class="text-muted small mb-2">@rule.Description</p>
+                                    }
+                                    
+                                    @if (rule.ApiDefinition != null)
+                                    {
+                                        <div class="small mb-2">
+                                            <span class="badge bg-@GetMethodBadgeClass(rule.ApiDefinition.Method) me-1">
+                                                @rule.ApiDefinition.Method
+                                            </span>
+                                            <code class="text-muted">@rule.ApiDefinition.Path</code>
+                                            <br />
+                                            <small class="text-muted">@rule.ApiDefinition.Name</small>
+                                        </div>
+                                    }
+                                    
+                                    @if (!string.IsNullOrEmpty(rule.Condition))
+                                    {
+                                        <div class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-filter me-1"></i>
+                                                شرط: <code>@rule.Condition</code>
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm btn-outline-primary" @onclick="() => EditRule(rule)">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteRule(rule.Id)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<!-- Add/Edit Rule Modal -->
+@if (showRuleModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-@(isEditMode ? "pencil" : "plus-lg") me-2"></i>
+                        @(isEditMode ? "ویرایش قانون" : "افزودن قانون جدید")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="HideRuleModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-tag me-1"></i>
+                                    نام قانون
+                                </label>
+                                <input type="text" class="form-control" @bind="currentRule.Name" 
+                                       placeholder="مثال: دریافت اطلاعات مشتری" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-sort-numeric-down me-1"></i>
+                                    ترتیب اجرا
+                                </label>
+                                <input type="number" class="form-control" @bind="currentRule.Order" />
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">وضعیت</label>
+                                <div class="form-check form-switch mt-2">
+                                    <input type="checkbox" class="form-check-input" @bind="currentRule.IsActive" 
+                                           id="ruleActiveSwitch" />
+                                    <label class="form-check-label" for="ruleActiveSwitch">
+                                        فعال
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-card-text me-1"></i>
+                            توضیحات
+                        </label>
+                        <textarea class="form-control" @bind="currentRule.Description" 
+                                   rows="2" placeholder="توضیحات اختیاری..."></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-cloud-download me-1"></i>
+                                    منبع Swagger
+                                </label>
+                                <select class="form-select" @bind="selectedSwaggerSourceId" @bind:after="OnSwaggerSourceSelected">
+                                    <option value="0">-- همه منابع --</option>
+                                    @foreach (var source in swaggerSources)
+                                    {
+                                        <option value="@source.Id">@source.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-link-45deg me-1"></i>
+                                    API مورد نظر
+                                </label>
+                                <select class="form-select" @bind="selectedApiId" @bind:after="OnApiSelected">
+                                    <option value="0">-- انتخاب API --</option>
+                                    @foreach (var api in filteredApis)
+                                    {
+                                        <option value="@api.Id">[@api.Method] @api.Name</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">
+                                    @if (selectedSwaggerSourceId > 0)
+                                    {
+                                        <span>@filteredApis.Count API فیلتر شده</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@availableApis.Count API موجود</span>
+                                    }
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (selectedApi != null)
+                    {
+                        <div class="alert alert-info">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-info-circle me-1"></i>
+                                اطلاعات API انتخاب شده
+                            </h6>
+                            <p class="mb-2"><strong>نام:</strong> @selectedApi.Name</p>
+                            <p class="mb-2"><strong>مسیر:</strong> <code>@selectedApi.Path</code></p>
+                            @if (!string.IsNullOrEmpty(selectedApi.Description))
+                            {
+                                <p class="mb-0"><strong>توضیحات:</strong> @selectedApi.Description</p>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(selectedApi.RequestSchema))
+                        {
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-box-arrow-in-down me-1"></i>
+                                    ساختار ورودی API
+                                </label>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <pre class="mb-0 small"><code>@selectedApi.RequestSchema</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(selectedApi.ResponseSchema))
+                        {
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-box-arrow-up me-1"></i>
+                                    ساختار خروجی API
+                                </label>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <pre class="mb-0 small"><code>@selectedApi.ResponseSchema</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Test Data for Previous Result -->
+                        @if (currentRule.Order > 1)
+                        {
+                            <div class="card mb-3 border-secondary">
+                                <div class="card-header bg-secondary text-white">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-database me-2"></i>
+                                        داده‌های تست برای نتیجه قانون قبلی
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted small">
+                                        این قانون از نتیجه قانون قبلی استفاده می‌کند. برای تست، داده‌های نمونه را وارد کنید:
+                                    </p>
+                                    <textarea class="form-control font-monospace" 
+                                              @bind="testPreviousResultJson" 
+                                              rows="5"
+                                              placeholder='{"userId": "bc53f3a7-ada6-425d-ac30-fb74d9975bfc", "name": "علی"}'></textarea>
+                                    <small class="form-text text-muted">
+                                        این داده‌ها فقط برای تست استفاده می‌شوند و در قانون ذخیره نمی‌شوند.
+                                    </small>
+                                    
+                                    <div class="alert alert-info mt-2 small">
+                                        <strong>نکته:</strong> اگر API نیاز به فیلد خاصی دارد (مثل userId)، می‌توانید از نگاشت ورودی استفاده کنید:
+                                        <pre class="mb-0 mt-1">{"userId": "{{previousResult.userId}}"}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- API Test Panel -->
+                        <ApiTestPanel 
+                            SelectedApi="@selectedApi"
+                            AuthSettingId="@policy?.AuthenticationSettingId"
+                            PreviousResult="@GetPreviousRuleResult()"
+                            InputMappingJson="@inputMappingJson"
+                            OnConditionGenerated="@HandleConditionGenerated"
+                            OnMappingGenerated="@HandleMappingGenerated" />
+                    }
+                    
+                    <!-- Input Mapping -->
+                    @if (currentRule.Order > 1)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-box-arrow-in-down me-1"></i>
+                                نگاشت ورودی (Input Mapping) - اختیاری
+                            </label>
+                            <textarea class="form-control font-monospace" 
+                                      @bind="inputMappingJson" 
+                                      rows="5"
+                                      placeholder='{"userId": "{{previousResult.userId}}", "name": "{{previousResult.name}}"}'></textarea>
+                            <small class="form-text text-muted">
+                                نگاشت برای تبدیل نتیجه قانون قبلی به ورودی این API. اگر API نیاز به فیلدهای خاصی دارد، آنها را اینجا تعریف کنید.
+                            </small>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-filter me-1"></i>
+                            شرط اجرا (اختیاری)
+                        </label>
+                        <input type="text" class="form-control font-monospace" @bind="currentRule.Condition" 
+                               placeholder='مثال: {{apiResult.Data.field}} == "value"' />
+                        <small class="form-text text-muted">
+                            شرطی که روی نتیجه API اعمال می‌شود. از دکمه "تست API" بالا برای ساخت خودکار شرط استفاده کنید.
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-diagram-3 me-1"></i>
+                            نگاشت خروجی (Output Mapping) - اختیاری
+                        </label>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mb-2" @onclick="GenerateMappingTemplate">
+                            <i class="bi bi-magic me-1"></i>
+                            ایجاد الگوی نگاشت
+                        </button>
+                        <textarea class="form-control font-monospace" 
+                                  @bind="mappingJson" 
+                                  rows="10"
+                                  placeholder='{"field1": "{{apiResult.Data.field}}", "field2": "value"}'></textarea>
+                        <small class="form-text text-muted">
+                            نگاشت برای تبدیل نتیجه API. از دکمه "تست API" بالا برای ایجاد خودکار نگاشت استفاده کنید.
+                        </small>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <h6 class="alert-heading">
+                            <i class="bi bi-lightbulb me-1"></i>
+                            راهنما
+                        </h6>
+                        <ul class="mb-0 small">
+                            <li>از <code>{{`{{previousResult.field}}`}}</code> برای دسترسی به نتیجه قانون قبلی</li>
+                            <li>از <code>{{`{{toString(value)}}`}}</code> برای تبدیل به رشته</li>
+                            <li>از <code>{{`{{toNumber(value)}}`}}</code> برای تبدیل به عدد</li>
+                            <li>از <code>{{`{{dateNow()}}`}}</code> برای تاریخ و زمان فعلی</li>
+                            <li>از <code>{{`{{concat(a, b)}}`}}</code> برای ترکیب مقادیر</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideRuleModal">
+                        <i class="bi bi-x-lg me-1"></i>
+                        انصراف
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveRule" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        @(isEditMode ? "ذخیره تغییرات" : "افزودن قانون")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int PolicyId { get; set; }
+
+    private PolicyDto? policy;
+    private List<RuleDto> rules = new();
+    private List<SwaggerSourceDto> swaggerSources = new();
+    private List<ApiDefinitionDto> availableApis = new();
+    private List<ApiDefinitionDto> filteredApis = new();
+    private bool isLoading = true;
+    private bool showRuleModal = false;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private CreateRuleDto currentRule = new();
+    private int? editingRuleId = null;
+    private int selectedSwaggerSourceId = 0;
+    private int selectedApiId = 0;
+    private ApiDefinitionDto? selectedApi = null;
+    private string inputMappingJson = "{}";
+    private string mappingJson = "{}";
+    private string testPreviousResultJson = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPolicyDetails();
+        await LoadSwaggerSources();
+        await LoadAvailableApis();
+    }
+
+    private async Task LoadSwaggerSources()
+    {
+        try
+        {
+            swaggerSources = await ApiService.GetSwaggerSourcesAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در بارگذاری منابع Swagger: {ex.Message}");
+        }
+    }
+
+    private async Task LoadPolicyDetails()
+    {
+        isLoading = true;
+        try
+        {
+            policy = await ApiService.GetPolicyByIdAsync(PolicyId);
+            if (policy != null)
+            {
+                rules = policy.Rules;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در بارگذاری جزئیات سیاست: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadAvailableApis()
+    {
+        try
+        {
+            availableApis = await ApiService.GetApiCatalogAsync();
+            filteredApis = availableApis;
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در بارگذاری لیست API: {ex.Message}");
+        }
+    }
+
+    private void OnSwaggerSourceSelected()
+    {
+        if (selectedSwaggerSourceId > 0)
+        {
+            filteredApis = availableApis.Where(a => a.SwaggerSourceId == selectedSwaggerSourceId).ToList();
+        }
+        else
+        {
+            filteredApis = availableApis;
+        }
+        
+        // Reset API selection if current selection is not in filtered list
+        if (selectedApiId > 0 && !filteredApis.Any(a => a.Id == selectedApiId))
+        {
+            selectedApiId = 0;
+            selectedApi = null;
+        }
+    }
+
+    private void ShowAddRuleModal()
+    {
+        currentRule = new CreateRuleDto 
+        { 
+            PolicyId = PolicyId,
+            IsActive = true,
+            Order = rules.Any() ? rules.Max(r => r.Order) + 1 : 1
+        };
+        selectedSwaggerSourceId = 0;
+        selectedApiId = 0;
+        selectedApi = null;
+        filteredApis = availableApis;
+        mappingJson = "{}";
+        isEditMode = false;
+        editingRuleId = null;
+        showRuleModal = true;
+    }
+
+    private void EditRule(RuleDto rule)
+    {
+        currentRule = new CreateRuleDto
+        {
+            PolicyId = PolicyId,
+            ApiDefinitionId = rule.ApiDefinitionId,
+            Name = rule.Name,
+            Description = rule.Description,
+            Condition = rule.Condition,
+            ActionJson = rule.ActionJson,
+            Order = rule.Order,
+            IsActive = rule.IsActive
+        };
+        
+        selectedApiId = rule.ApiDefinitionId ?? 0;
+        selectedApi = rule.ApiDefinition != null ? availableApis.FirstOrDefault(a => a.Id == rule.ApiDefinitionId) : null;
+        
+        // Parse existing ActionJson
+        try
+        {
+            if (!string.IsNullOrEmpty(rule.ActionJson))
+            {
+                var actionObj = JObject.Parse(rule.ActionJson);
+                mappingJson = actionObj["mapping"]?.ToString() ?? "{}";
+                inputMappingJson = actionObj["inputMapping"]?.ToString() ?? "{}";
+            }
+        }
+        catch { }
+        
+        isEditMode = true;
+        editingRuleId = rule.Id;
+        showRuleModal = true;
+    }
+
+    private void HideRuleModal()
+    {
+        showRuleModal = false;
+        currentRule = new CreateRuleDto();
+        isEditMode = false;
+        editingRuleId = null;
+        selectedSwaggerSourceId = 0;
+        selectedApiId = 0;
+        selectedApi = null;
+        filteredApis = availableApis;
+        mappingJson = "{}";
+    }
+
+    private void OnApiSelected()
+    {
+        selectedApi = availableApis.FirstOrDefault(a => a.Id == selectedApiId);
+        currentRule.ApiDefinitionId = selectedApiId > 0 ? selectedApiId : null;
+        
+        if (selectedApi != null && string.IsNullOrEmpty(currentRule.Name))
+        {
+            currentRule.Name = selectedApi.Name;
+        }
+    }
+
+    private void GenerateMappingTemplate()
+    {
+        if (selectedApi == null || string.IsNullOrEmpty(selectedApi.RequestSchema))
+        {
+            ToastService.ShowWarning("لطفاً ابتدا یک API انتخاب کنید");
+            return;
+        }
+
+        try
+        {
+            var schema = JToken.Parse(selectedApi.RequestSchema);
+            var template = GenerateMappingFromSchema(schema);
+            mappingJson = template.ToString(Newtonsoft.Json.Formatting.Indented);
+            ToastService.ShowSuccess("الگوی نگاشت ایجاد شد");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در ایجاد الگو: {ex.Message}");
+        }
+    }
+
+    private JObject GenerateMappingFromSchema(JToken schema)
+    {
+        var mapping = new JObject();
+        
+        try
+        {
+            var properties = schema["properties"] as JObject;
+            if (properties != null)
+            {
+                foreach (var prop in properties.Properties())
+                {
+                    mapping[prop.Name] = $"{{{{previousResult.{prop.Name}}}}}";
+                }
+            }
+        }
+        catch { }
+        
+        return mapping;
+    }
+
+    // API Test Panel Callbacks
+    private void HandleConditionGenerated(string condition)
+    {
+        currentRule.Condition = condition;
+        ToastService.ShowSuccess("شرط به قانون اضافه شد");
+        StateHasChanged();
+    }
+
+    private void HandleMappingGenerated(string mapping)
+    {
+        mappingJson = mapping;
+        ToastService.ShowSuccess("نگاشت به قانون اضافه شد");
+        StateHasChanged();
+    }
+
+    private object? GetPreviousRuleResult()
+    {
+        // If user provided test data, use it
+        if (!string.IsNullOrWhiteSpace(testPreviousResultJson))
+        {
+            try
+            {
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(testPreviousResultJson);
+            }
+            catch
+            {
+                // If parsing fails, return null
+                return null;
+            }
+        }
+        
+        // Otherwise, return null (no previous result for testing)
+        return null;
+    }
+
+    private async Task SaveRule()
+    {
+        if (string.IsNullOrWhiteSpace(currentRule.Name))
+        {
+            ToastService.ShowWarning("لطفاً نام قانون را وارد کنید");
+            return;
+        }
+
+        if (!currentRule.ApiDefinitionId.HasValue)
+        {
+            ToastService.ShowWarning("لطفاً یک API انتخاب کنید");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            // Build ActionJson
+            var actionObj = new JObject
+            {
+                ["type"] = "callApi",
+                ["apiId"] = currentRule.ApiDefinitionId.Value
+            };
+            
+            // Only add inputMapping if it's not empty
+            if (!string.IsNullOrWhiteSpace(inputMappingJson) && inputMappingJson != "{}")
+            {
+                try
+                {
+                    var inputMapping = JToken.Parse(inputMappingJson);
+                    if (inputMapping is JObject jobj && jobj.Count > 0)
+                    {
+                        actionObj["inputMapping"] = inputMapping;
+                    }
+                }
+                catch
+                {
+                    // If parsing fails, skip inputMapping
+                }
+            }
+            
+            // Only add mapping if it's not empty
+            if (!string.IsNullOrWhiteSpace(mappingJson) && mappingJson != "{}")
+            {
+                try
+                {
+                    var mapping = JToken.Parse(mappingJson);
+                    if (mapping is JObject jobj && jobj.Count > 0)
+                    {
+                        actionObj["mapping"] = mapping;
+                    }
+                }
+                catch
+                {
+                    // If parsing fails, skip mapping
+                }
+            }
+            
+            currentRule.ActionJson = actionObj.ToString();
+
+            if (isEditMode && editingRuleId.HasValue)
+            {
+                var updateDto = new UpdateRuleDto
+                {
+                    ApiDefinitionId = currentRule.ApiDefinitionId,
+                    Name = currentRule.Name,
+                    Description = currentRule.Description,
+                    Condition = currentRule.Condition,
+                    ActionJson = currentRule.ActionJson,
+                    Order = currentRule.Order,
+                    IsActive = currentRule.IsActive
+                };
+                var result = await ApiService.UpdateRuleAsync(editingRuleId.Value, updateDto);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess("قانون با موفقیت به‌روزرسانی شد");
+                    await LoadPolicyDetails();
+                    HideRuleModal();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در به‌روزرسانی قانون");
+                }
+            }
+            else
+            {
+                var result = await ApiService.CreateRuleAsync(currentRule);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess("قانون با موفقیت اضافه شد");
+                    await LoadPolicyDetails();
+                    HideRuleModal();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در افزودن قانون");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteRule(int ruleId)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "آیا از حذف این قانون اطمینان دارید؟"))
+        {
+            try
+            {
+                var result = await ApiService.DeleteRuleAsync(ruleId);
+                if (result)
+                {
+                    ToastService.ShowSuccess("قانون با موفقیت حذف شد");
+                    await LoadPolicyDetails();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در حذف قانون");
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastService.ShowError($"خطا: {ex.Message}");
+            }
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/policies");
+    }
+
+    private string GetMethodBadgeClass(string method)
+    {
+        return method.ToUpper() switch
+        {
+            "GET" => "success",
+            "POST" => "primary",
+            "PUT" => "warning",
+            "DELETE" => "danger",
+            "PATCH" => "info",
+            _ => "secondary"
+        };
+    }
+}
+
+@inject IJSRuntime JSRuntime

@@ -1,0 +1,514 @@
+@page "/policies"
+@page "/policies/{PolicyId:int}"
+@using TadbirRuleEngine.Web.Models
+@using TadbirRuleEngine.Web.Services
+@inject ApiService ApiService
+@inject IToastService ToastService
+@inject NavigationManager Navigation
+
+<PageTitle>@(PolicyId.HasValue ? "جزئیات سیاست" : "سیاست‌ها")</PageTitle>
+
+@if (!PolicyId.HasValue)
+{
+    <!-- Policies List View -->
+    <div class="container-fluid">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0">
+                <i class="bi bi-file-earmark-text-fill me-2"></i>
+                سیاست‌ها
+            </h2>
+            <button class="btn btn-primary" @onclick="ShowCreatePolicyModal" disabled="@isLoading">
+                <i class="bi bi-plus-lg me-1"></i>
+                ایجاد سیاست جدید
+            </button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">در حال بارگذاری...</span>
+                </div>
+                <p class="mt-3 text-muted">در حال بارگذاری سیاست‌ها...</p>
+            </div>
+        }
+        else if (!policies.Any())
+        {
+            <div class="alert alert-info d-flex align-items-center" role="alert">
+                <i class="bi bi-info-circle-fill fs-4 me-3"></i>
+                <div>
+                    <h5 class="alert-heading mb-1">هیچ سیاستی یافت نشد</h5>
+                    <p class="mb-0">برای شروع، یک سیاست جدید ایجاد کنید.</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-4">
+                @foreach (var policy in policies)
+                {
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <h5 class="card-title mb-0">@policy.Name</h5>
+                                    <span class="badge @(policy.IsActive ? "bg-success" : "bg-secondary")">
+                                        @(policy.IsActive ? "فعال" : "غیرفعال")
+                                    </span>
+                                </div>
+                                
+                                @if (!string.IsNullOrEmpty(policy.Description))
+                                {
+                                    <p class="card-text text-muted small">@policy.Description</p>
+                                }
+                                
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between text-muted small">
+                                        <span>
+                                            <i class="bi bi-list-check me-1"></i>
+                                            @policy.Rules.Count قانون
+                                        </span>
+                                        <span>
+                                            @if (policy.LastExecutedAt.HasValue)
+                                            {
+                                                <i class="bi bi-clock me-1"></i>
+                                                @policy.LastExecutedAt.Value.ToString("yyyy/MM/dd")
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">اجرا نشده</span>
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-outline-primary btn-sm" @onclick="() => ViewPolicyDetails(policy.Id)">
+                                        <i class="bi bi-eye me-1"></i>
+                                        مشاهده جزئیات
+                                    </button>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-outline-success btn-sm" 
+                                                @onclick="() => ShowExecutePolicyModal(policy.Id)"
+                                                disabled="@isExecuting">
+                                            <i class="bi bi-play-fill me-1"></i>
+                                            اجرا
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" 
+                                                @onclick="() => EditPolicy(policy)">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" 
+                                                @onclick="() => DeletePolicy(policy.Id)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Create/Edit Policy Modal -->
+    @if (showPolicyModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <EditForm Model="currentPolicy" OnValidSubmit="SavePolicy">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="bi bi-@(isEditMode ? "pencil" : "plus-lg") me-2"></i>
+                                @(isEditMode ? "ویرایش سیاست" : "ایجاد سیاست جدید")
+                            </h5>
+                            <button type="button" class="btn-close" @onclick="HidePolicyModal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-tag me-1"></i>
+                                    نام سیاست
+                                </label>
+                                <InputText class="form-control" @bind-Value="currentPolicy.Name" 
+                                           placeholder="مثال: فرآیند صدور فاکتور" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-card-text me-1"></i>
+                                    توضیحات
+                                </label>
+                                <InputTextArea class="form-control" @bind-Value="currentPolicy.Description" 
+                                               rows="3" placeholder="توضیحات اختیاری..." />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-shield-lock me-1"></i>
+                                    احراز هویت (اختیاری)
+                                </label>
+                                <select class="form-select" @bind="currentPolicy.AuthenticationSettingId">
+                                    <option value="">-- بدون احراز هویت --</option>
+                                    @foreach (var authSetting in authSettings)
+                                    {
+                                        <option value="@authSetting.Id">@authSetting.Name</option>
+                                    }
+                                </select>
+                                <small class="form-text text-muted">
+                                    در صورت انتخاب، قبل از اجرای قوانین، توکن احراز هویت دریافت می‌شود
+                                </small>
+                            </div>
+                            <div class="form-check form-switch">
+                                <InputCheckbox class="form-check-input" @bind-Value="currentPolicy.IsActive" 
+                                               id="policyActiveSwitch" />
+                                <label class="form-check-label fw-bold" for="policyActiveSwitch">
+                                    <i class="bi bi-toggle-on me-1"></i>
+                                    فعال
+                                </label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="HidePolicyModal">
+                                <i class="bi bi-x-lg me-1"></i>
+                                انصراف
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-check-lg me-1"></i>
+                                }
+                                @(isEditMode ? "ذخیره تغییرات" : "ایجاد سیاست")
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Execute Policy Modal -->
+    @if (showExecuteModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-play-fill me-2"></i>
+                            اجرای سیاست
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="HideExecuteModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-code-square me-1"></i>
+                                پارامترهای ورودی (JSON - اختیاری)
+                            </label>
+                            <textarea class="form-control font-monospace" 
+                                      @bind="executionParameters" 
+                                      rows="8"
+                                      placeholder='{"key": "value"}'></textarea>
+                            <small class="form-text text-muted">
+                                پارامترهای ورودی را به صورت JSON وارد کنید. این پارامترها در اجرای قوانین در دسترس خواهند بود.
+                            </small>
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(executionResult))
+                        {
+                            <div class="alert alert-success">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-check-circle me-1"></i>
+                                    نتیجه اجرا
+                                </h6>
+                                <pre class="mb-0 small"><code>@executionResult</code></pre>
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(executionError))
+                        {
+                            <div class="alert alert-danger">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    خطا در اجرا
+                                </h6>
+                                <p class="mb-0">@executionError</p>
+                            </div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HideExecuteModal">
+                            <i class="bi bi-x-lg me-1"></i>
+                            بستن
+                        </button>
+                        <button type="button" class="btn btn-success" @onclick="ExecutePolicy" disabled="@isExecuting">
+                            @if (isExecuting)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-play-fill me-1"></i>
+                            }
+                            اجرای سیاست
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <!-- Policy Details View with Rules -->
+    <PolicyDetails PolicyId="@PolicyId.Value" />
+}
+
+@code {
+    [Parameter] public int? PolicyId { get; set; }
+
+    private List<PolicyDto> policies = new();
+    private List<AuthenticationSettingDto> authSettings = new();
+    private bool isLoading = true;
+    private bool showPolicyModal = false;
+    private bool showExecuteModal = false;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private bool isExecuting = false;
+    private CreatePolicyDto currentPolicy = new();
+    private int? editingPolicyId = null;
+    private int? executingPolicyId = null;
+    private string executionParameters = "{}";
+    private string executionResult = string.Empty;
+    private string executionError = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!PolicyId.HasValue)
+        {
+            await LoadAuthSettings();
+            await LoadPolicies();
+        }
+    }
+
+    private async Task LoadAuthSettings()
+    {
+        try
+        {
+            authSettings = await ApiService.GetAuthenticationSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در بارگذاری تنظیمات احراز هویت: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!PolicyId.HasValue)
+        {
+            await LoadPolicies();
+        }
+    }
+
+    private async Task LoadPolicies()
+    {
+        isLoading = true;
+        try
+        {
+            policies = await ApiService.GetPoliciesAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در بارگذاری سیاست‌ها: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreatePolicyModal()
+    {
+        currentPolicy = new CreatePolicyDto { IsActive = true };
+        isEditMode = false;
+        editingPolicyId = null;
+        showPolicyModal = true;
+    }
+
+    private void EditPolicy(PolicyDto policy)
+    {
+        currentPolicy = new CreatePolicyDto
+        {
+            Name = policy.Name,
+            Description = policy.Description,
+            AuthenticationSettingId = policy.AuthenticationSettingId,
+            IsActive = policy.IsActive
+        };
+        isEditMode = true;
+        editingPolicyId = policy.Id;
+        showPolicyModal = true;
+    }
+
+    private void HidePolicyModal()
+    {
+        showPolicyModal = false;
+        currentPolicy = new CreatePolicyDto();
+        isEditMode = false;
+        editingPolicyId = null;
+    }
+
+    private async Task SavePolicy()
+    {
+        if (string.IsNullOrWhiteSpace(currentPolicy.Name))
+        {
+            ToastService.ShowWarning("لطفاً نام سیاست را وارد کنید");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            if (isEditMode && editingPolicyId.HasValue)
+            {
+                var updateDto = new UpdatePolicyDto
+                {
+                    Name = currentPolicy.Name,
+                    Description = currentPolicy.Description,
+                    AuthenticationSettingId = currentPolicy.AuthenticationSettingId,
+                    IsActive = currentPolicy.IsActive
+                };
+                var result = await ApiService.UpdatePolicyAsync(editingPolicyId.Value, updateDto);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess("سیاست با موفقیت به‌روزرسانی شد");
+                    await LoadPolicies();
+                    HidePolicyModal();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در به‌روزرسانی سیاست");
+                }
+            }
+            else
+            {
+                var result = await ApiService.CreatePolicyAsync(currentPolicy);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess("سیاست با موفقیت ایجاد شد");
+                    await LoadPolicies();
+                    HidePolicyModal();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در ایجاد سیاست");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeletePolicy(int id)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "آیا از حذف این سیاست اطمینان دارید؟"))
+        {
+            try
+            {
+                var result = await ApiService.DeletePolicyAsync(id);
+                if (result)
+                {
+                    ToastService.ShowSuccess("سیاست با موفقیت حذف شد");
+                    await LoadPolicies();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در حذف سیاست");
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastService.ShowError($"خطا: {ex.Message}");
+            }
+        }
+    }
+
+    private void ViewPolicyDetails(int policyId)
+    {
+        Navigation.NavigateTo($"/policies/{policyId}");
+    }
+
+    private void ShowExecutePolicyModal(int policyId)
+    {
+        executingPolicyId = policyId;
+        executionParameters = "{}";
+        executionResult = string.Empty;
+        executionError = string.Empty;
+        showExecuteModal = true;
+    }
+
+    private void HideExecuteModal()
+    {
+        showExecuteModal = false;
+        executingPolicyId = null;
+        executionParameters = "{}";
+        executionResult = string.Empty;
+        executionError = string.Empty;
+    }
+
+    private async Task ExecutePolicy()
+    {
+        if (!executingPolicyId.HasValue) return;
+
+        isExecuting = true;
+        executionResult = string.Empty;
+        executionError = string.Empty;
+
+        try
+        {
+            Dictionary<string, object?>? parameters = null;
+            
+            if (!string.IsNullOrWhiteSpace(executionParameters) && executionParameters != "{}")
+            {
+                parameters = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object?>>(executionParameters);
+            }
+
+            ToastService.ShowInfo("در حال اجرای سیاست...");
+            var result = await ApiService.ExecutePolicyAsync(executingPolicyId.Value, parameters);
+            
+            if (result != null)
+            {
+                executionResult = Newtonsoft.Json.JsonConvert.SerializeObject(result, Newtonsoft.Json.Formatting.Indented);
+                ToastService.ShowSuccess("سیاست با موفقیت اجرا شد");
+                await LoadPolicies();
+            }
+            else
+            {
+                executionError = "اجرای سیاست با خطا مواجه شد";
+                ToastService.ShowError("خطا در اجرای سیاست");
+            }
+        }
+        catch (Exception ex)
+        {
+            executionError = ex.Message;
+            ToastService.ShowError($"خطا در اجرای سیاست: {ex.Message}");
+        }
+        finally
+        {
+            isExecuting = false;
+        }
+    }
+}
+
+@inject IJSRuntime JSRuntime

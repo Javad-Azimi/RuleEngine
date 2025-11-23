@@ -1,0 +1,403 @@
+@page "/auth-settings"
+@using TadbirRuleEngine.Web.Models
+@using TadbirRuleEngine.Web.Services
+@inject ApiService ApiService
+@inject IToastService ToastService
+
+<PageTitle>تنظیمات احراز هویت</PageTitle>
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-shield-lock-fill me-2"></i>
+            تنظیمات احراز هویت
+        </h2>
+        <button class="btn btn-primary" @onclick="ShowCreateModal" disabled="@isLoading">
+            <i class="bi bi-plus-lg me-1"></i>
+            افزودن تنظیمات جدید
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">در حال بارگذاری...</span>
+            </div>
+        </div>
+    }
+    else if (!authSettings.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            هیچ تنظیمات احراز هویتی یافت نشد. برای شروع، یک تنظیمات جدید اضافه کنید.
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">نام</th>
+                                <th class="py-3">نقطه پایانی Token</th>
+                                <th class="py-3">نام کاربری</th>
+                                <th class="py-3 text-center">وضعیت</th>
+                                <th class="py-3 text-center">آخرین استفاده</th>
+                                <th class="py-3 text-center">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var setting in authSettings)
+                            {
+                                <tr>
+                                    <td class="px-4 py-3">
+                                        <strong>@setting.Name</strong>
+                                    </td>
+                                    <td class="py-3">
+                                        <small class="text-muted font-monospace">@setting.TokenEndpoint</small>
+                                    </td>
+                                    <td class="py-3">
+                                        <code>@setting.Username</code>
+                                    </td>
+                                    <td class="py-3 text-center">
+                                        <span class="badge @(setting.IsActive ? "bg-success" : "bg-secondary")">
+                                            @(setting.IsActive ? "فعال" : "غیرفعال")
+                                        </span>
+                                    </td>
+                                    <td class="py-3 text-center">
+                                        @if (setting.LastUsedAt.HasValue)
+                                        {
+                                            <small class="text-muted">@setting.LastUsedAt.Value.ToString("yyyy/MM/dd HH:mm")</small>
+                                        }
+                                        else
+                                        {
+                                            <small class="text-muted">هرگز</small>
+                                        }
+                                    </td>
+                                    <td class="py-3 text-center">
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => EditSetting(setting)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSetting(setting.Id)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Create/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-@(isEditMode ? "pencil" : "plus-lg") me-2"></i>
+                        @(isEditMode ? "ویرایش تنظیمات" : "افزودن تنظیمات جدید")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="HideModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-tag me-1"></i>
+                                    نام تنظیمات
+                                </label>
+                                <input type="text" class="form-control" @bind="currentSetting.Name" 
+                                       placeholder="مثال: احراز هویت اصلی" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-key me-1"></i>
+                                    Grant Type
+                                </label>
+                                <input type="text" class="form-control" @bind="currentSetting.GrantType" 
+                                       placeholder="password" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-link-45deg me-1"></i>
+                            نقطه پایانی Token
+                        </label>
+                        <input type="text" class="form-control" @bind="currentSetting.TokenEndpoint" 
+                               placeholder="https://api.example.com/oauth/token" />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-person me-1"></i>
+                                    نام کاربری
+                                </label>
+                                <input type="text" class="form-control" @bind="currentSetting.Username" 
+                                       placeholder="username" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-lock me-1"></i>
+                                    رمز عبور
+                                </label>
+                                <input type="password" class="form-control" @bind="currentSetting.Password" 
+                                       placeholder="@(isEditMode ? "برای تغییر وارد کنید" : "password")" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-app me-1"></i>
+                                    Client ID (اختیاری)
+                                </label>
+                                <input type="text" class="form-control" @bind="currentSetting.ClientId" 
+                                       placeholder="client_id" />
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-shield-check me-1"></i>
+                                    Client Secret (اختیاری)
+                                </label>
+                                <input type="password" class="form-control" @bind="currentSetting.ClientSecret" 
+                                       placeholder="client_secret" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-list-check me-1"></i>
+                            Scope (اختیاری)
+                        </label>
+                        <input type="text" class="form-control" @bind="currentSetting.Scope" 
+                               placeholder="api read write" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="bi bi-code-square me-1"></i>
+                            پارامترهای اضافی (JSON - اختیاری)
+                        </label>
+                        <textarea class="form-control font-monospace" @bind="currentSetting.AdditionalParameters" 
+                                  rows="3" placeholder='{"audience": "https://api.example.com"}'></textarea>
+                    </div>
+
+                    <div class="form-check form-switch">
+                        <input type="checkbox" class="form-check-input" @bind="currentSetting.IsActive" 
+                               id="authActiveSwitch" />
+                        <label class="form-check-label fw-bold" for="authActiveSwitch">
+                            <i class="bi bi-toggle-on me-1"></i>
+                            فعال
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideModal">
+                        <i class="bi bi-x-lg me-1"></i>
+                        انصراف
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveSetting" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-lg me-1"></i>
+                        }
+                        @(isEditMode ? "ذخیره تغییرات" : "ایجاد تنظیمات")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AuthenticationSettingDto> authSettings = new();
+    private bool isLoading = true;
+    private bool showModal = false;
+    private bool isEditMode = false;
+    private bool isSaving = false;
+    private CreateAuthenticationSettingDto currentSetting = new();
+    private int? editingSettingId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuthSettings();
+    }
+
+    private async Task LoadAuthSettings()
+    {
+        isLoading = true;
+        try
+        {
+            authSettings = await ApiService.GetAuthenticationSettingsAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا در بارگذاری تنظیمات: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ShowCreateModal()
+    {
+        currentSetting = new CreateAuthenticationSettingDto { IsActive = true, GrantType = "password" };
+        isEditMode = false;
+        editingSettingId = null;
+        showModal = true;
+    }
+
+    private void EditSetting(AuthenticationSettingDto setting)
+    {
+        currentSetting = new CreateAuthenticationSettingDto
+        {
+            Name = setting.Name,
+            TokenEndpoint = setting.TokenEndpoint,
+            Username = setting.Username,
+            Password = "", // Don't populate password
+            GrantType = setting.GrantType,
+            ClientId = setting.ClientId,
+            ClientSecret = "", // Don't populate secret
+            Scope = setting.Scope,
+            IsActive = setting.IsActive
+        };
+        isEditMode = true;
+        editingSettingId = setting.Id;
+        showModal = true;
+    }
+
+    private void HideModal()
+    {
+        showModal = false;
+        currentSetting = new CreateAuthenticationSettingDto();
+        isEditMode = false;
+        editingSettingId = null;
+    }
+
+    private async Task SaveSetting()
+    {
+        if (string.IsNullOrWhiteSpace(currentSetting.Name) || 
+            string.IsNullOrWhiteSpace(currentSetting.TokenEndpoint) ||
+            string.IsNullOrWhiteSpace(currentSetting.Username))
+        {
+            ToastService.ShowWarning("لطفاً فیلدهای الزامی را پر کنید");
+            return;
+        }
+
+        if (!isEditMode && string.IsNullOrWhiteSpace(currentSetting.Password))
+        {
+            ToastService.ShowWarning("لطفاً رمز عبور را وارد کنید");
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            if (isEditMode && editingSettingId.HasValue)
+            {
+                var updateDto = new UpdateAuthenticationSettingDto
+                {
+                    Name = currentSetting.Name,
+                    TokenEndpoint = currentSetting.TokenEndpoint,
+                    Username = currentSetting.Username,
+                    Password = currentSetting.Password,
+                    GrantType = currentSetting.GrantType,
+                    ClientId = currentSetting.ClientId,
+                    ClientSecret = currentSetting.ClientSecret,
+                    Scope = currentSetting.Scope,
+                    AdditionalParameters = currentSetting.AdditionalParameters,
+                    IsActive = currentSetting.IsActive
+                };
+                var result = await ApiService.UpdateAuthenticationSettingAsync(editingSettingId.Value, updateDto);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess("تنظیمات با موفقیت به‌روزرسانی شد");
+                    await LoadAuthSettings();
+                    HideModal();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در به‌روزرسانی تنظیمات");
+                }
+            }
+            else
+            {
+                var result = await ApiService.CreateAuthenticationSettingAsync(currentSetting);
+                if (result != null)
+                {
+                    ToastService.ShowSuccess("تنظیمات با موفقیت ایجاد شد");
+                    await LoadAuthSettings();
+                    HideModal();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در ایجاد تنظیمات");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"خطا: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteSetting(int id)
+    {
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "آیا از حذف این تنظیمات اطمینان دارید؟"))
+        {
+            try
+            {
+                var result = await ApiService.DeleteAuthenticationSettingAsync(id);
+                if (result)
+                {
+                    ToastService.ShowSuccess("تنظیمات با موفقیت حذف شد");
+                    await LoadAuthSettings();
+                }
+                else
+                {
+                    ToastService.ShowError("خطا در حذف تنظیمات");
+                }
+            }
+            catch (Exception ex)
+            {
+                ToastService.ShowError($"خطا: {ex.Message}");
+            }
+        }
+    }
+}
+
+@inject IJSRuntime JSRuntime

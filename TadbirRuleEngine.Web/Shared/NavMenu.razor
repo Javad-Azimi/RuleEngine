@@ -1,0 +1,63 @@
+<div class="d-flex flex-column h-100">
+    <div class="p-3 border-bottom">
+        <h5 class="text-white mb-0">
+            <i class="bi bi-gear-fill me-2"></i>
+            تدبیر
+        </h5>
+    </div>
+    
+    <nav class="flex-grow-1 overflow-auto">
+        <ul class="nav flex-column p-2">
+            <li class="nav-item">
+                <NavLink class="nav-link text-white rounded" href="" Match="NavLinkMatch.All">
+                    <i class="bi bi-house-fill me-2"></i>
+                    خانه
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link text-white rounded" href="swagger-sources">
+                    <i class="bi bi-cloud-download-fill me-2"></i>
+                    منابع Swagger
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link text-white rounded" href="api-catalog">
+                    <i class="bi bi-list-ul me-2"></i>
+                    کاتالوگ API
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link text-white rounded" href="policies">
+                    <i class="bi bi-file-earmark-text-fill me-2"></i>
+                    سیاست‌ها
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link text-white rounded" href="execution-logs">
+                    <i class="bi bi-journal-text me-2"></i>
+                    گزارش اجرا
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link text-white rounded" href="auth-settings">
+                    <i class="bi bi-shield-lock-fill me-2"></i>
+                    احراز هویت
+                </NavLink>
+            </li>
+        </ul>
+    </nav>
+</div>
+
+<style>
+    .nav-link {
+        transition: background-color 0.2s;
+    }
+    
+    .nav-link:hover {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+    
+    .nav-link.active {
+        background-color: rgba(255, 255, 255, 0.2) !important;
+    }
+</style>

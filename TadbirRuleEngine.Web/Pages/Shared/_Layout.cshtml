@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>سیستم مدیریت قوانین تدبیر</title>
+    <base href="~/" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <link href="css/app.css" rel="stylesheet" />
+    <link href="TadbirRuleEngine.Web.styles.css" rel="stylesheet" />
+  @*   <link href="_content/Blazored.Modal/blazored-modal.css" rel="stylesheet" />
+    <link href="_content/Blazored.Toast/blazored-toast.min.css" rel="stylesheet" /> *@
+</head>
+<body>
+    @RenderBody()
+
+    <div id="blazor-error-ui">
+        <environment include="Staging,Production">
+            خطایی رخ داده است. ممکن است برنامه دیگر پاسخگو نباشد تا زمانی که صفحه را بارگذاری مجدد کنید.
+        </environment>
+        <environment include="Development">
+            یک خطای مدیریت نشده رخ داده است. جزئیات را در ابزار توسعه‌دهنده مرورگر مشاهده کنید.
+        </environment>
+        <a href="" class="reload">بارگذاری مجدد</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script src="_framework/blazor.server.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    @* <script src="_content/Blazored.Modal/blazored.modal.js"></script> *@
+</body>
+</html>

@@ -1,0 +1,226 @@
+@using Newtonsoft.Json.Linq
+@using Newtonsoft.Json
+
+<div class="card border-info">
+    <div class="card-header bg-info text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="bi bi-filter me-2"></i>
+                ساخت شرط پیشرفته
+            </h6>
+            <button class="btn btn-sm btn-light" @onclick="AddCondition">
+                <i class="bi bi-plus-lg me-1"></i>
+                افزودن شرط
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        @if (!conditions.Any())
+        {
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                روی فیلدهای نتیجه API کلیک کنید یا دکمه "افزودن شرط" را بزنید
+            </div>
+        }
+        else
+        {
+            @for (int i = 0; i < conditions.Count; i++)
+            {
+                var index = i;
+                var condition = conditions[index];
+                
+                <div class="card mb-2 @(index == selectedConditionIndex ? "border-primary" : "")">
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <!-- Field Path -->
+                            <div class="col-md-4">
+                                <label class="form-label small">فیلد:</label>
+                                <input type="text" class="form-control form-control-sm font-monospace" 
+                                       @bind="condition.FieldPath" 
+                                       placeholder="{{apiResult.field}}" />
+                            </div>
+                            
+                            <!-- Operator -->
+                            <div class="col-md-2">
+                                <label class="form-label small">عملگر:</label>
+                                <select class="form-select form-select-sm" @bind="condition.Operator">
+                                    <option value="==">==</option>
+                                    <option value="!=">!=</option>
+                                    <option value=">">&gt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<">&lt;</option>
+                                    <option value="<=">&lt;=</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Value -->
+                            <div class="col-md-4">
+                                <label class="form-label small">مقدار:</label>
+                                <input type="text" class="form-control form-control-sm" 
+                                       @bind="condition.Value" 
+                                       placeholder='"value" یا 123' />
+                            </div>
+                            
+                            <!-- Actions -->
+                            <div class="col-md-2">
+                                <label class="form-label small">&nbsp;</label>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-outline-danger" 
+                                            @onclick="() => RemoveCondition(index)"
+                                            title="حذف">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Logical Operator (if not last) -->
+                        @if (index < conditions.Count - 1)
+                        {
+                            <div class="mt-2">
+                                <select class="form-select form-select-sm w-auto" @bind="condition.LogicalOperator">
+                                    <option value="&&">AND (و)</option>
+                                    <option value="||">OR (یا)</option>
+                                </select>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            
+            <!-- Generated Condition Preview -->
+            <div class="alert alert-secondary mt-3">
+                <label class="form-label fw-bold">شرط نهایی:</label>
+                <pre class="mb-2 font-monospace small">@GeneratedCondition</pre>
+                <button class="btn btn-primary btn-sm" @onclick="ApplyConditions">
+                    <i class="bi bi-check-lg me-1"></i>
+                    اعمال شرط
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<string> OnConditionGenerated { get; set; }
+    [Parameter] public string? InitialFieldPath { get; set; }
+    [Parameter] public string? InitialValue { get; set; }
+    
+    private List<ConditionItem> conditions = new();
+    private int selectedConditionIndex = -1;
+    
+    protected override void OnParametersSet()
+    {
+        // If initial field path is provided, add it as first condition
+        if (!string.IsNullOrEmpty(InitialFieldPath) && !conditions.Any())
+        {
+            AddConditionWithField(InitialFieldPath, InitialValue);
+        }
+    }
+    
+    public void AddConditionWithField(string fieldPath, string? value = null)
+    {
+        var condition = new ConditionItem
+        {
+            FieldPath = fieldPath,
+            Operator = "==",
+            Value = value ?? "",
+            LogicalOperator = "&&"
+        };
+        conditions.Add(condition);
+        selectedConditionIndex = conditions.Count - 1;
+        StateHasChanged();
+    }
+    
+    private void AddCondition()
+    {
+        var condition = new ConditionItem
+        {
+            FieldPath = "",
+            Operator = "==",
+            Value = "",
+            LogicalOperator = "&&"
+        };
+        conditions.Add(condition);
+        selectedConditionIndex = conditions.Count - 1;
+    }
+    
+    private void RemoveCondition(int index)
+    {
+        conditions.RemoveAt(index);
+        if (selectedConditionIndex >= conditions.Count)
+        {
+            selectedConditionIndex = conditions.Count - 1;
+        }
+    }
+    
+    private string GeneratedCondition
+    {
+        get
+        {
+            if (!conditions.Any()) return "";
+            
+            // Generate structured JSON condition (new format)
+            var structuredConditions = conditions.Select(c => new
+            {
+                fieldPath = c.FieldPath.Replace("apiResult.", ""), // Remove apiResult prefix if present
+                @operator = c.Operator,
+                value = c.Value.Trim('"'), // Remove quotes from value
+                logicalOperator = c.LogicalOperator == "&&" ? "AND" : "OR"
+            }).ToList();
+            
+            // Create list without logicalOperator for last item
+            var finalConditions = new List<object>();
+            for (int i = 0; i < structuredConditions.Count; i++)
+            {
+                var c = structuredConditions[i];
+                if (i < structuredConditions.Count - 1)
+                {
+                    finalConditions.Add(new
+                    {
+                        fieldPath = c.fieldPath,
+                        @operator = c.@operator,
+                        value = c.value,
+                        logicalOperator = c.logicalOperator
+                    });
+                }
+                else
+                {
+                    finalConditions.Add(new
+                    {
+                        fieldPath = c.fieldPath,
+                        @operator = c.@operator,
+                        value = c.value
+                    });
+                }
+            }
+            
+            return JsonConvert.SerializeObject(finalConditions, Formatting.Indented);
+        }
+    }
+    
+    private async Task ApplyConditions()
+    {
+        if (!conditions.Any()) return;
+        
+        var finalCondition = GeneratedCondition;
+        if (OnConditionGenerated.HasDelegate)
+        {
+            await OnConditionGenerated.InvokeAsync(finalCondition);
+        }
+    }
+    
+    public void Clear()
+    {
+        conditions.Clear();
+        selectedConditionIndex = -1;
+    }
+    
+    private class ConditionItem
+    {
+        public string FieldPath { get; set; } = "";
+        public string Operator { get; set; } = "==";
+        public string Value { get; set; } = "";
+        public string LogicalOperator { get; set; } = "&&";
+    }
+}

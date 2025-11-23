@@ -1,0 +1,277 @@
+@using TadbirRuleEngine.Web.Models
+@using TadbirRuleEngine.Web.Services
+@using Newtonsoft.Json.Linq
+@using Newtonsoft.Json
+@inject ApiService ApiService
+@inject IToastService ToastService
+
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0">
+            <i class="bi bi-play-circle me-2"></i>
+            تست API و ساخت شرط
+        </h6>
+    </div>
+    <div class="card-body">
+        @if (SelectedApi == null)
+        {
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                لطفاً ابتدا یک API انتخاب کنید
+            </div>
+        }
+        else
+        {
+            <!-- Test Button -->
+            <div class="d-flex gap-2 mb-3">
+                <button class="btn btn-success" @onclick="TestApiCall" disabled="@isTesting">
+                    @if (isTesting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-play-fill me-1"></i>
+                    }
+                    تست فراخوانی API
+                </button>
+                
+                @if (testResult != null)
+                {
+                    <button class="btn btn-outline-secondary" @onclick="ClearTestResult">
+                        <i class="bi bi-x-circle me-1"></i>
+                        پاک کردن نتیجه
+                    </button>
+                }
+            </div>
+
+            <!-- Test Result -->
+            @if (testResult != null)
+            {
+                <div class="alert alert-success">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">
+                            <i class="bi bi-check-circle me-1"></i>
+                            نتیجه تست API
+                        </h6>
+                        <button class="btn btn-sm btn-outline-success" @onclick="() => showJsonView = !showJsonView">
+                            <i class="bi bi-@(showJsonView ? "tree" : "code") me-1"></i>
+                            @(showJsonView ? "نمای درختی" : "نمای JSON")
+                        </button>
+                    </div>
+
+                    @if (showJsonView)
+                    {
+                        <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow: auto;"><code>@testResultJson</code></pre>
+                    }
+                    else if (testResultObject != null)
+                    {
+                        <div class="tree-view bg-light p-3 rounded" style="max-height: 400px; overflow: auto;">
+                            @RenderJsonTree(testResultObject, "apiResult")
+                        </div>
+                    }
+                </div>
+
+                <!-- Visual Rule Builder -->
+                <VisualRuleBuilder ApiResponse="@testResult"
+                                  OnConditionGenerated="@HandleConditionGenerated"
+                                  OnMappingGenerated="@HandleMappingGenerated" />
+            }
+            else if (testError != null)
+            {
+                <div class="alert alert-danger">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        خطا در تست API
+                    </h6>
+                    <p class="mb-0">@testError</p>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public ApiDefinitionDto? SelectedApi { get; set; }
+    [Parameter] public int? AuthSettingId { get; set; }
+    [Parameter] public object? PreviousResult { get; set; }
+    [Parameter] public string? InputMappingJson { get; set; }
+    [Parameter] public EventCallback<string> OnConditionGenerated { get; set; }
+    [Parameter] public EventCallback<string> OnMappingGenerated { get; set; }
+
+    private bool isTesting = false;
+    private bool showJsonView = false;
+    private string? testResultJson;
+    private JToken? testResultObject;
+    private object? testResult;
+    private string? testError;
+
+
+
+    private async Task TestApiCall()
+    {
+        if (SelectedApi == null) return;
+
+        isTesting = true;
+        testError = null;
+        testResult = null;
+        testResultJson = null;
+        testResultObject = null;
+
+        try
+        {
+            // Call the test API endpoint
+            object? inputMapping = null;
+            if (!string.IsNullOrWhiteSpace(InputMappingJson))
+            {
+                try
+                {
+                    inputMapping = JsonConvert.DeserializeObject<JObject>(InputMappingJson);
+                }
+                catch
+                {
+                    // If parsing fails, ignore
+                }
+            }
+
+            var testRequest = new
+            {
+                apiId = SelectedApi.Id,
+                authSettingId = AuthSettingId,
+                previousResult = PreviousResult,
+                inputMapping = inputMapping
+            };
+
+            var response = await ApiService.TestApiCallAsync(testRequest);
+            
+            if (response != null)
+            {
+                testResult = response;
+                
+                // If response is already a JToken, use it directly
+                if (response is JToken jtoken)
+                {
+                    testResultObject = jtoken;
+                    testResultJson = jtoken.ToString(Formatting.Indented);
+                }
+                else
+                {
+                    // Otherwise, serialize and parse
+                    testResultJson = JsonConvert.SerializeObject(response, Formatting.Indented);
+                    testResultObject = JToken.Parse(testResultJson);
+                }
+                
+                ToastService.ShowSuccess("تست API با موفقیت انجام شد");
+            }
+            else
+            {
+                testError = "پاسخی از API دریافت نشد";
+            }
+        }
+        catch (Exception ex)
+        {
+            testError = ex.Message;
+            ToastService.ShowError($"خطا در تست API: {ex.Message}");
+        }
+        finally
+        {
+            isTesting = false;
+        }
+    }
+
+    private void ClearTestResult()
+    {
+        testResult = null;
+        testResultJson = null;
+        testResultObject = null;
+        testError = null;
+    }
+
+    private RenderFragment RenderJsonTree(JToken token, string path, int level = 0)
+    {
+        return builder =>
+        {
+            if (token == null) return;
+
+            var indent = new string(' ', level * 4);
+
+            switch (token.Type)
+            {
+                case JTokenType.Object:
+                    var obj = (JObject)token;
+                    foreach (var prop in obj.Properties())
+                    {
+                        var propPath = level == 0 ? prop.Name : $"{path}.{prop.Name}";
+                        builder.OpenElement(0, "div");
+                        builder.AddAttribute(1, "class", "tree-node");
+                        builder.AddAttribute(2, "style", $"margin-left: {level * 20}px;");
+                        
+                        if (prop.Value.Type == JTokenType.Object || prop.Value.Type == JTokenType.Array)
+                        {
+                            builder.OpenElement(3, "span");
+                            builder.AddAttribute(4, "class", "text-primary fw-bold");
+                            builder.AddContent(5, $"▼ {prop.Name}:");
+                            builder.CloseElement();
+                            builder.AddContent(6, RenderJsonTree(prop.Value, propPath, level + 1));
+                        }
+                        else
+                        {
+                            builder.OpenElement(7, "span");
+                            builder.AddAttribute(8, "class", "tree-leaf");
+                            builder.AddContent(11, $"• {prop.Name}: ");
+                            builder.OpenElement(12, "code");
+                            builder.AddAttribute(13, "class", "text-success");
+                            builder.AddContent(14, prop.Value.ToString());
+                            builder.CloseElement();
+                            builder.CloseElement();
+                        }
+                        
+                        builder.CloseElement();
+                    }
+                    break;
+
+                case JTokenType.Array:
+                    var arr = (JArray)token;
+                    for (int i = 0; i < arr.Count; i++)
+                    {
+                        var itemPath = $"{path}[{i}]";
+                        builder.OpenElement(15, "div");
+                        builder.AddAttribute(16, "style", $"margin-left: {level * 20}px;");
+                        builder.OpenElement(17, "span");
+                        builder.AddAttribute(18, "class", "text-info");
+                        builder.AddContent(19, $"[{i}]:");
+                        builder.CloseElement();
+                        builder.AddContent(20, RenderJsonTree(arr[i], itemPath, level + 1));
+                        builder.CloseElement();
+                    }
+                    break;
+            }
+        };
+    }
+
+    private async Task HandleConditionGenerated(string condition)
+    {
+        if (OnConditionGenerated.HasDelegate)
+        {
+            await OnConditionGenerated.InvokeAsync(condition);
+            ToastService.ShowSuccess("شرط اعمال شد");
+        }
+    }
+
+    private async Task HandleMappingGenerated(string mapping)
+    {
+        if (OnMappingGenerated.HasDelegate)
+        {
+            await OnMappingGenerated.InvokeAsync(mapping);
+            ToastService.ShowSuccess("نگاشت اعمال شد");
+        }
+    }
+}
+
+<style>
+    .tree-node {
+        padding: 2px 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+</style>

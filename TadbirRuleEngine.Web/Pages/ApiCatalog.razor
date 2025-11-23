@@ -1,0 +1,135 @@
+@page "/api-catalog"
+@using TadbirRuleEngine.Web.Models
+@using TadbirRuleEngine.Web.Services
+@inject ApiService ApiService
+
+<PageTitle>API Catalog</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1>API Catalog</h1>
+            <p class="text-muted">Browse all available API endpoints from imported Swagger sources.</p>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="mb-3">
+                    <input type="text" class="form-control" placeholder="Search APIs..." @bind="searchTerm" @oninput="FilterApis" />
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Method</th>
+                                <th>Path</th>
+                                <th>Description</th>
+                                <th>Source</th>
+                                <th>Auth Required</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var api in filteredApis)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="badge @GetMethodBadgeClass(api.Method)">
+                                            @api.Method
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <code>@api.Path</code>
+                                    </td>
+                                    <td>@api.Description</td>
+                                    <td>
+                                        <small class="text-muted">@api.SwaggerSource?.Name</small>
+                                    </td>
+                                    <td>
+                                        @if (api.RequiresAuth)
+                                        {
+                                            <i class="oi oi-lock-locked text-warning" title="Authentication required"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="oi oi-lock-unlocked text-success" title="No authentication required"></i>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                
+                @if (!filteredApis.Any())
+                {
+                    <div class="text-center text-muted mt-4">
+                        <p>No APIs found. Try importing some Swagger sources first.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ApiDefinitionDto> apis = new();
+    private List<ApiDefinitionDto> filteredApis = new();
+    private bool isLoading = true;
+    private string searchTerm = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApis();
+    }
+
+    private async Task LoadApis()
+    {
+        isLoading = true;
+        apis = await ApiService.GetApiCatalogAsync();
+        filteredApis = apis;
+        isLoading = false;
+    }
+
+    private void FilterApis(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            filteredApis = apis;
+        }
+        else
+        {
+            filteredApis = apis.Where(a => 
+                a.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                a.Path.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                (a.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+    }
+
+    private string GetMethodBadgeClass(string method)
+    {
+        return method.ToUpper() switch
+        {
+            "GET" => "bg-success",
+            "POST" => "bg-primary",
+            "PUT" => "bg-warning",
+            "DELETE" => "bg-danger",
+            "PATCH" => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+}

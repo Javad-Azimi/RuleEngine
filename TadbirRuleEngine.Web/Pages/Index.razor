@@ -1,0 +1,149 @@
+@page "/"
+
+<PageTitle>سیستم مدیریت قوانین تدبیر</PageTitle>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-5 fw-bold">
+                <i class="bi bi-gear-fill text-primary me-2"></i>
+                خوش آمدید به سیستم مدیریت قوانین تدبیر
+            </h1>
+            <p class="lead text-muted">سیستمی قدرتمند برای هماهنگ‌سازی گردش کار API با قابلیت‌های نگاشت پیشرفته</p>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-cloud-download-fill text-primary" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="card-title fw-bold">منابع Swagger</h5>
+                    <p class="card-text text-muted">وارد کردن و مدیریت تعاریف OpenAPI/Swagger</p>
+                    <a href="/swagger-sources" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-1"></i>
+                        مدیریت منابع
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-list-ul text-success" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="card-title fw-bold">کاتالوگ API</h5>
+                    <p class="card-text text-muted">مرور نقاط پایانی API موجود</p>
+                    <a href="/api-catalog" class="btn btn-success">
+                        <i class="bi bi-arrow-left me-1"></i>
+                        مشاهده کاتالوگ
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-file-earmark-text-fill text-warning" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="card-title fw-bold">سیاست‌ها</h5>
+                    <p class="card-text text-muted">ایجاد و مدیریت سیاست‌های اجرایی با قوانین</p>
+                    <a href="/policies" class="btn btn-warning">
+                        <i class="bi bi-arrow-left me-1"></i>
+                        مدیریت سیاست‌ها
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <i class="bi bi-journal-text text-info" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="card-title fw-bold">گزارش اجرا</h5>
+                    <p class="card-text text-muted">نظارت بر تاریخچه اجرای سیاست‌ها و قوانین</p>
+                    <a href="/execution-logs" class="btn btn-info">
+                        <i class="bi bi-arrow-left me-1"></i>
+                        مشاهده گزارش‌ها
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-star-fill me-2"></i>
+                        ویژگی‌های کلیدی
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success fs-4 me-3 mt-1"></i>
+                                <div>
+                                    <h6 class="fw-bold">یکپارچه‌سازی Swagger</h6>
+                                    <p class="text-muted mb-0">وارد کردن تعاریف API از آدرس‌های OpenAPI/Swagger</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success fs-4 me-3 mt-1"></i>
+                                <div>
+                                    <h6 class="fw-bold">موتور قوانین</h6>
+                                    <p class="text-muted mb-0">ایجاد منطق شرطی برای هماهنگ‌سازی API</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success fs-4 me-3 mt-1"></i>
+                                <div>
+                                    <h6 class="fw-bold">موتور نگاشت</h6>
+                                    <p class="text-muted mb-0">تبدیل خروجی‌های API قبل از انتقال به فراخوانی بعدی</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success fs-4 me-3 mt-1"></i>
+                                <div>
+                                    <h6 class="fw-bold">زمان‌بندی</h6>
+                                    <p class="text-muted mb-0">اجرای سیاست‌ها بر اساس برنامه زمانی یا درخواست</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success fs-4 me-3 mt-1"></i>
+                                <div>
+                                    <h6 class="fw-bold">ثبت اجرا</h6>
+                                    <p class="text-muted mb-0">ردیابی کامل تمام اجراها</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start">
+                                <i class="bi bi-check-circle-fill text-success fs-4 me-3 mt-1"></i>
+                                <div>
+                                    <h6 class="fw-bold">اجرای چند مرحله‌ای</h6>
+                                    <p class="text-muted mb-0">اجرای قوانین متوالی با انتقال داده بین آن‌ها</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

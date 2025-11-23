@@ -1,0 +1,17 @@
+@inherits LayoutComponentBase
+
+<div class="d-flex vh-100">
+    <div class="bg-dark text-white" style="width: 250px; flex-shrink: 0;">
+        <NavMenu />
+    </div>
+    
+    <div class="flex-grow-1 d-flex flex-column">
+        <header class="bg-light border-bottom py-3 px-4">
+            <h4 class="mb-0">سیستم مدیریت قوانین تدبیر</h4>
+        </header>
+        
+        <main class="flex-grow-1 overflow-auto p-4">
+            @Body
+        </main>
+    </div>
+</div>
